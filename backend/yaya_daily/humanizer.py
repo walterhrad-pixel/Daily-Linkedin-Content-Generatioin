@@ -1,8 +1,10 @@
 from google.adk.agents.llm_agent import Agent
 
+from .config import get_llm_model
+
 humanizer_agent = Agent(
     name="humanizer_agent",
-    model="gemini-2.5-flash",
+    model=get_llm_model(),
     description="Reviews the draft to remove AI-isms and ensures a human, punchy tone.",
     instruction="""You are the Humanizer Agent in a Daily Content Generator pipeline.
 
@@ -18,5 +20,5 @@ Preserve exactly:
 Do not introduce new facts, testimonials, or capabilities. Maximize readability and authentic delivery.
 
 Return only the final polished piece (keep the FORMAT line if the draft included one).
-"""
+""",
 )

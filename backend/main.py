@@ -1,10 +1,21 @@
 import argparse
 import asyncio
+import json
+import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from yaya_daily.agent import root_agent
-from yaya_daily.utils import read_path_contents
+from yaya_daily.config import ensure_api_key
+from yaya_daily.utils import read_file_contents
+
+_BACKEND_DIR = Path(__file__).resolve().parent
+
+
+def _load_env() -> None:
+    load_dotenv(_BACKEND_DIR / ".env")
+    load_dotenv(_BACKEND_DIR / "yaya_daily" / ".env")
 
 
 def build_initial_prompt(
@@ -29,8 +40,8 @@ def build_initial_prompt(
 {audience}
 {format_line}
 
-## Source Material (codebase / documentation)
-{source_material if source_material.strip() else "[No readable text files were found at the given path.]"}
+## Source Material (uploaded file / documentation)
+{source_material if source_material.strip() else "[No readable source text was provided.]"}
 
 ---
 
@@ -40,12 +51,12 @@ Use the source material above as your only factual basis. Identify a concrete fe
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Daily Content Generator — marketing content from any codebase or docs folder.",
+        description="Daily Content Generator — marketing content from any document file.",
     )
     parser.add_argument(
-        "--path",
+        "--file",
         required=True,
-        help="Path to a codebase or documentation folder to analyze.",
+        help="Path to a single text file (e.g. README, changelog, notes).",
     )
     parser.add_argument(
         "--product-name",
@@ -63,41 +74,79 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional preferred output format.",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the final content as a JSON object on stdout (for API integrations).",
+    )
     return parser.parse_args()
 
 
-async def main() -> None:
-    load_dotenv()
-    args = parse_args()
-
-    print("Starting SequentialAgent: DailyContentOrchestrator")
-    print("Pipeline: Miner -> Ghostwriter -> Humanizer\n")
-    print(f"Reading source material from: {args.path}")
-
-    source_material = read_path_contents(args.path)
-    file_count_hint = source_material.count("--- FILE:")
-    print(f"Loaded {file_count_hint} text file(s) into context.\n")
-
-    format_map = {
+def _format_map() -> dict[str, str]:
+    return {
         "linkedin": "LinkedIn post",
         "twitter": "Twitter thread",
         "blog": "blog intro",
     }
-    content_format = format_map.get(args.format) if args.format else None
 
+
+def _load_source_material(*, file: str) -> str:
+    return read_file_contents(file)
+
+
+async def generate_content(
+    *,
+    product_name: str,
+    audience: str,
+    content_format: str | None = None,
+    file: str,
+) -> str:
+    """Run the Miner -> Ghostwriter -> Humanizer pipeline and return final text."""
+    _load_env()
+    ensure_api_key()
+
+    source_material = _load_source_material(file=file)
     initial_prompt = build_initial_prompt(
-        product_name=args.product_name,
-        audience=args.audience,
+        product_name=product_name,
+        audience=audience,
         source_material=source_material,
         content_format=content_format,
     )
 
     response = await root_agent.run_async(initial_prompt)
+    return str(response.content)
 
-    print("\n--- Final Marketing Content ---")
-    print(response.content)
-    print("-------------------------------\n")
-    print("Daily Content Generator completed successfully.")
+
+async def main() -> None:
+    args = parse_args()
+    format_map = _format_map()
+    content_format = format_map.get(args.format) if args.format else None
+
+    if not args.json:
+        print("Starting SequentialAgent: DailyContentOrchestrator")
+        print("Pipeline: Miner -> Ghostwriter -> Humanizer")
+        print(f"Reading source material from: {args.file}\n")
+
+    try:
+        final = await generate_content(
+            file=args.file,
+            product_name=args.product_name,
+            audience=args.audience,
+            content_format=content_format,
+        )
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+            sys.exit(1)
+        raise
+
+    if args.json:
+        print(json.dumps({"ok": True, "content": final}))
+    else:
+        print("\n--- Final Marketing Content ---")
+        print(final)
+        print("-------------------------------\n")
+        print("Daily Content Generator completed successfully.")
 
 
 if __name__ == "__main__":

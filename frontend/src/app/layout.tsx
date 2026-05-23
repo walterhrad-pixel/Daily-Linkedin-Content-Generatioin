@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Yaya Daily - Content Engine',
-  description: 'AI-generated humanized LinkedIn posts.',
+  title: 'Daily Content Generator',
+  description: 'Upload a document and generate marketing content with an ADK agent pipeline.',
 };
 
 export default function RootLayout({

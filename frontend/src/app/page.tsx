@@ -1,131 +1,244 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
-// Mock Data
-const MOCK_TODAY_POST = "Data syncing shouldn't be a part-time job. Background syncing saves you 2 hours a day. Don't take my word for it—Sarah J. says 'It feels like magic!' Stop wasting time, start shipping.";
-const MOCK_HISTORY = [
-  { date: "Oct 24, 2026", snippet: "Slow feedback loops kill motivation. Our new preview deployment feature..." },
-  { date: "Oct 23, 2026", snippet: "Is your team spending more time debugging than shipping? It's time to rethink..." },
-  { date: "Oct 22, 2026", snippet: "Scaling too fast is a myth. Breaking under load is real. The solution..." },
-  { date: "Oct 21, 2026", snippet: "Burnout isn't from hard work. It's from doing repetitive tasks. Automate..." },
-  { date: "Oct 20, 2026", snippet: "Every click you remove from a user journey increases conversion by 12%..." },
-];
+type HistoryEntry = {
+  date: string;
+  productName: string;
+  snippet: string;
+  content: string;
+};
 
-export default function YayaDailyPage() {
+const STORAGE_KEY = "daily-content-history";
+
+const ACCEPTED_TYPES =
+  ".md,.markdown,.txt,.rst,.json,.yaml,.yml,.html,.htm,.csv";
+
+export default function DailyContentPage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [productName, setProductName] = useState("");
+  const [audience, setAudience] = useState("");
+  const [format, setFormat] = useState<"" | "linkedin" | "twitter" | "blog">("");
+  const [content, setContent] = useState(
+    "Upload a document below and click Generate. The pipeline reads your file, mines an insight, drafts PAS copy, then humanizes it.",
+  );
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setHistory(JSON.parse(raw) as HistoryEntry[]);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const saveHistory = (entry: HistoryEntry) => {
+    setHistory((prev) => {
+      const next = [entry, ...prev].slice(0, 7);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(MOCK_TODAY_POST);
+    navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const manualTrigger = () => {
-    setLoading(true);
-    // Mock firing the Go orchestrator via API
-    setTimeout(() => {
-      alert("Manual trigger completed! Go Orchestrator finished.");
-      setLoading(false);
-    }, 1500);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setSourceFile(file);
+    setError(null);
   };
 
+  const handleGenerate = async () => {
+    if (!sourceFile) return;
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", sourceFile);
+      formData.append("productName", productName);
+      formData.append("audience", audience);
+      if (format) formData.append("format", format);
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await res.json()) as {
+        ok: boolean;
+        content?: string;
+        error?: string;
+      };
+
+      if (!data.ok || !data.content) {
+        throw new Error(data.error ?? "Generation failed.");
+      }
+
+      setContent(data.content);
+      const now = new Date().toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      saveHistory({
+        date: now,
+        productName,
+        snippet: data.content.slice(0, 120) + (data.content.length > 120 ? "…" : ""),
+        content: data.content,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canGenerate = Boolean(sourceFile && productName && audience);
+
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-      
-      {/* Top Left History Toggle */}
-      <button 
+    <main className="page-shell">
+      <button
+        type="button"
         className="history-toggle"
         onClick={() => setDrawerOpen(!drawerOpen)}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 12h18M3 6h18M3 18h18"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3 12h18M3 6h18M3 18h18" />
         </svg>
         History
       </button>
 
-      <div className={`history-drawer ${drawerOpen ? 'open' : ''}`}>
-        <h2 style={{marginTop: '2rem', marginBottom: '1.5rem', color: 'var(--text-primary)'}}>Past 7 Days</h2>
+      <aside className={`history-drawer ${drawerOpen ? "open" : ""}`}>
+        <h2 className="drawer-title">Recent runs</h2>
         <div className="history-list">
-          {MOCK_HISTORY.map((item, i) => (
-            <div key={i} className="history-item">
-              <h4 style={{ color: 'var(--text-primary)' }}>{item.date}</h4>
-              <p style={{ color: 'var(--text-secondary)' }}>{item.snippet}</p>
-            </div>
-          ))}
+          {history.length === 0 ? (
+            <p className="muted">Generated content will appear here.</p>
+          ) : (
+            history.map((item, i) => (
+              <button
+                key={`${item.date}-${i}`}
+                type="button"
+                className="history-item history-item-btn"
+                onClick={() => {
+                  setContent(item.content);
+                  setProductName(item.productName);
+                  setDrawerOpen(false);
+                }}
+              >
+                <h4>{item.date} · {item.productName}</h4>
+                <p>{item.snippet}</p>
+              </button>
+            ))
+          )}
         </div>
-      </div>
+      </aside>
 
-      {/* Hero Section */}
-      <div className="glass-panel animate-in" style={{ maxWidth: '680px', width: '90%', margin: '2rem', background: 'var(--glass-bg)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem' }}>
-          <img 
-            src="/logo.png" 
-            alt="Yaya AI Logo" 
-            style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover' }}
-          />
+      <div className="glass-panel animate-in main-card">
+        <header className="hero-header">
+          <div className="hero-icon" aria-hidden>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M12 3v18M3 12h18" strokeLinecap="round" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+          </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color: 'var(--accent-color)' }}>
-              Yaya AI Daily LinkedIn Content Generation
-            </h1>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem', marginTop: '0.5rem', lineHeight: '1.4' }}>
-              This is a contextual based content generator for marketing the 'Yaya AI' SaaS Application. It pulls data from sources like Yaya AI project documentation, investor pitches, onboarding materials, and YouTube tutorials.
+            <h1>Daily Content Generator</h1>
+            <p className="hero-sub">
+              Upload a single file (README, changelog, notes, etc.). A three-agent ADK pipeline
+              (Miner → Ghostwriter → Humanizer) turns it into human-sounding marketing
+              copy — LinkedIn posts, threads, or blog intros.
             </p>
           </div>
-        </div>
-        
-        <div style={{
-          fontSize: '1.15rem',
-          lineHeight: '1.6',
-          color: 'var(--text-primary)',
-          fontWeight: 400,
-          background: '#f8fafc',
-          padding: '1.5rem',
-          borderRadius: '8px',
-          borderLeft: '4px solid var(--accent-color)',
-          border: '1px solid var(--glass-border)',
-          whiteSpace: 'pre-wrap',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
-        }}>
-          {MOCK_TODAY_POST}
+        </header>
+
+        <section className="form-grid" aria-label="Generation settings">
+          <label>
+            <span>Source file</span>
+            <div className="file-upload-row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                onChange={handleFileChange}
+                className="file-input-native"
+              />
+              <button
+                type="button"
+                className="btn-file"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {sourceFile ? "Change file" : "Choose file"}
+              </button>
+              <span className="file-name">
+                {sourceFile ? sourceFile.name : "Markdown, text, JSON, YAML, HTML, or CSV (max 2 MB)"}
+              </span>
+            </div>
+          </label>
+          <label>
+            <span>Product name</span>
+            <input
+              type="text"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              placeholder="e.g. Acme Analytics"
+            />
+          </label>
+          <label>
+            <span>Target audience</span>
+            <input
+              type="text"
+              value={audience}
+              onChange={(e) => setAudience(e.target.value)}
+              placeholder="e.g. startup founders, DevOps engineers"
+            />
+          </label>
+          <label>
+            <span>Format (optional)</span>
+            <select value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
+              <option value="">Auto (agent chooses)</option>
+              <option value="linkedin">LinkedIn post</option>
+              <option value="twitter">Twitter thread</option>
+              <option value="blog">Blog intro</option>
+            </select>
+          </label>
+        </section>
+
+        {error && <p className="error-banner" role="alert">{error}</p>}
+
+        <div className="output-box">{content}</div>
+
+        <div className="actions-row">
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleGenerate}
+            disabled={loading || !canGenerate}
+          >
+            {loading ? "Running pipeline…" : "Generate content"}
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleCopy} disabled={!content}>
+            {copied ? "Copied!" : "Copy"}
+          </button>
         </div>
 
-        <button className="btn-primary" onClick={handleCopy}>
-          {copied ? (
-            <>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              Copied!
-            </>
-          ) : (
-            <>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              Copy to Clipboard
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Dev Settings Gear */}
-      <div 
-        className="dev-gear" 
-        onClick={manualTrigger}
-        title="Manual Trigger: Force Go Orchestrator to run"
-      >
-        {loading ? (
-          <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>...</span>
-        ) : (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        )}
+        <p className="footer-note">
+          Requires <code>OPENAI_API_KEY</code> in <code>backend/.env</code>. CLI:{" "}
+          <code>python main.py --file notes.md --product-name &hellip; --audience &hellip;</code>
+        </p>
       </div>
     </main>
   );

@@ -1,8 +1,10 @@
 from google.adk.agents.llm_agent import Agent
 
+from .config import get_llm_model
+
 ghostwriter_agent = Agent(
     name="ghostwriter_agent",
-    model="gemini-2.5-flash",
+    model=get_llm_model(),
     description="Drafts marketing content using PAS based on insights from the Miner.",
     instruction="""You are the Ghostwriter Agent in a Daily Content Generator pipeline.
 

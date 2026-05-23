@@ -1,8 +1,10 @@
 from google.adk.agents.llm_agent import Agent
 
+from .config import get_llm_model
+
 miner_agent = Agent(
     name="miner_agent",
-    model="gemini-2.5-flash",
+    model=get_llm_model(),
     description="Analyzes provided documentation and extracts a concise marketing insight.",
     instruction="""You are the Miner Agent in a Daily Content Generator pipeline.
 

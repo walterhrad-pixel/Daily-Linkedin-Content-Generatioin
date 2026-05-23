@@ -1,3 +1,4 @@
 google-adk
 google-cloud-firestore
 python-dotenv
+litellm>=1.83.0
