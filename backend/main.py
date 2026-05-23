@@ -5,12 +5,18 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
 from yaya_daily.agent import root_agent
 from yaya_daily.config import ensure_api_key
 from yaya_daily.utils import read_file_contents
 
 _BACKEND_DIR = Path(__file__).resolve().parent
+
+_APP_NAME = "daily_content_generator"
+_USER_ID = "cli_user"
 
 
 def _load_env() -> None:
@@ -113,8 +119,38 @@ async def generate_content(
         content_format=content_format,
     )
 
-    response = await root_agent.run_async(initial_prompt)
-    return str(response.content)
+    # ADK agents must be run through a Runner, not called directly.
+    session_service = InMemorySessionService()
+    runner = Runner(
+        agent=root_agent,
+        app_name=_APP_NAME,
+        session_service=session_service,
+    )
+
+    session = await session_service.create_session(
+        app_name=_APP_NAME,
+        user_id=_USER_ID,
+    )
+
+    message = types.Content(
+        role="user",
+        parts=[types.Part(text=initial_prompt)],
+    )
+
+    final_text = ""
+    async for event in runner.run_async(
+        user_id=_USER_ID,
+        session_id=session.id,
+        new_message=message,
+    ):
+        if (
+            event.is_final_response()
+            and event.content
+            and event.content.parts
+        ):
+            final_text = event.content.parts[0].text or ""
+
+    return final_text
 
 
 async def main() -> None:
