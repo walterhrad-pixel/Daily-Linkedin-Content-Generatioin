@@ -23,6 +23,9 @@ const ALLOWED_EXTENSIONS = new Set([
 ]);
 
 function resolveBackendDir(): string {
+  if (process.env.BACKEND_DIR) {
+    return path.resolve(process.env.BACKEND_DIR);
+  }
   return path.resolve(process.cwd(), "..", "backend");
 }
 

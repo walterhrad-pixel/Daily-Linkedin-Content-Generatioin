@@ -2,6 +2,34 @@
 
 Universal marketing content pipeline: upload a document (README, changelog, notes), run a three-agent **Google ADK** flow (Miner → Ghostwriter → Humanizer), and get human-sounding copy powered by **OpenAI** (via LiteLLM).
 
+## Quick start (one script)
+
+From the repo root in PowerShell:
+
+```powershell
+.\run.ps1        # build + run (production)
+.\run.ps1 -Dev    # dev server with hot reload
+```
+
+Then open http://localhost:3000.
+
+## Deploy on Render.com
+
+Create a **Web Service** connected to this repo (leave **Root Directory** empty).
+
+| Setting | Value |
+|--------|--------|
+| **Build Command** | `bash ./render-build.sh` |
+| **Start Command** | `bash ./render-run.sh` |
+
+**Environment variables** (Render dashboard → Environment):
+
+- `OPENAI_API_KEY` — required
+- `OPENAI_MODEL` — optional (default `openai/gpt-4o-mini` via backend config)
+
+`render-build.sh` installs Python + Node deps and runs `next build`.  
+`render-run.sh` starts the Next.js server on Render’s `PORT` and points the API at the backend venv.
+
 ## Setup
 
 ### Backend
