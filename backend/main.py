@@ -12,6 +12,7 @@ from google.genai import types
 from yaya_daily.agent import root_agent
 from yaya_daily.config import ensure_api_key
 from yaya_daily.utils import read_file_contents
+from firebase import fetch_kb, save_daily_post
 
 _BACKEND_DIR = Path(__file__).resolve().parent
 
@@ -112,12 +113,17 @@ async def generate_content(
     ensure_api_key()
 
     source_material = _load_source_material(file=file)
+    kb_material = fetch_kb()
+    if kb_material:
+        source_material = kb_material + source_material
+        
     initial_prompt = build_initial_prompt(
         product_name=product_name,
         audience=audience,
         source_material=source_material,
         content_format=content_format,
     )
+
 
     # ADK agents must be run through a Runner, not called directly.
     session_service = InMemorySessionService()
@@ -150,7 +156,15 @@ async def generate_content(
         ):
             final_text = event.content.parts[0].text or ""
 
+    save_daily_post(
+        product_name=product_name,
+        audience=audience,
+        format_type=content_format,
+        content=final_text,
+    )
+
     return final_text
+
 
 
 async def main() -> None:

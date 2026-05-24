@@ -3,3 +3,4 @@
 !.env.example
 backend/.env
 backend/**/.env
+*firebase-service-account.json

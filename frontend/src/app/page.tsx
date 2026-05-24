@@ -116,7 +116,7 @@ export default function DailyContentPage() {
         className="history-toggle"
         onClick={() => setDrawerOpen(!drawerOpen)}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M3 12h18M3 6h18M3 18h18" />
         </svg>
         History
@@ -124,7 +124,7 @@ export default function DailyContentPage() {
 
       <aside className={`history-drawer ${drawerOpen ? "open" : ""}`}>
         <h2 className="drawer-title">Recent runs</h2>
-        <div className="history-list">
+        <div>
           {history.length === 0 ? (
             <p className="muted">Generated content will appear here.</p>
           ) : (
@@ -150,15 +150,14 @@ export default function DailyContentPage() {
       <div className="glass-panel animate-in main-card">
         <header className="hero-header">
           <div className="hero-icon" aria-hidden>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 3v18M3 12h18" strokeLinecap="round" />
-              <circle cx="12" cy="12" r="9" />
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
           </div>
           <div>
             <h1>Daily Content Generator</h1>
             <p className="hero-sub">
-              Upload a single file (README, changelog, notes, etc.). A three-agent ADK pipeline
+              Upload a single file (README, changelog, notes, etc.). A three-agent pipeline
               (Miner → Ghostwriter → Humanizer) turns it into human-sounding marketing
               copy — LinkedIn posts, threads, or blog intros.
             </p>
@@ -234,11 +233,6 @@ export default function DailyContentPage() {
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
-
-        <p className="footer-note">
-          Requires <code>OPENAI_API_KEY</code> in <code>backend/.env</code>. CLI:{" "}
-          <code>python main.py --file notes.md --product-name &hellip; --audience &hellip;</code>
-        </p>
       </div>
     </main>
   );
